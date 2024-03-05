@@ -1,0 +1,23 @@
+[project]
+name = "simply-cli"
+version = "0.0.3"
+description = "A simple framework for building method-based reactive CLIs."
+authors = [{name="Evan Cowin"}]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+homepage = "https://github.com/ImaMapleTree/simply-cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/simplycli"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
