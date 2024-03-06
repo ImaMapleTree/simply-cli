@@ -104,7 +104,7 @@ class ArgParser:
         if details.name:
             # found segment that matches details.name
             if named_segment_index is not None:
-                if len(segments) < named_segment_index + 1:
+                if len(segments) > named_segment_index + 1:
                     return expected_type(segments[named_segment_index + 1])
                 elif expected_type is bool:  # if the expected type is a boolean then the presence alone should ret true
                     return True
@@ -124,7 +124,7 @@ The parsing method used by :func:`ArgParser.parse`. This defaults to :func:`ArgP
 
 
 class ArgMatcher:
-    _empty_type_ = type(inspect._empty)
+    _empty_type_ = inspect._empty
 
     def __init__(self, command: "cli.Command") -> list[Any]:
         self.func: Callable = None
@@ -154,8 +154,13 @@ class ArgMatcher:
             return re.split(r"\s+", raw_input)
 
         arguments = []
-        for parameter in self.parameters:
+        for i in range(len(self.parameters)):
+            parameter = self.parameters[i]
             default = parameter.default
+
+            if self.command.args is not None and i < len(self.command.args):
+                default = self.command.args[i]
+
             expected_type = parameter.annotation
             if expected_type is ArgMatcher._empty_type_:
                 expected_type = str
@@ -178,11 +183,8 @@ class ArgMatcher:
                     value = default.parse(raw_input, expected_type)
 
                 arguments.append(value)
-            else:
-                if default is ArgMatcher._empty_type_:
-                    arguments.append(None)
-                else:
-                    arguments.append(default)
+            elif default is not ArgMatcher._empty_type_:
+                arguments.append(default)
 
         return arguments
 

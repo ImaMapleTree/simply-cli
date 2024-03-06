@@ -1,8 +1,9 @@
 import inspect
 import re
 import abc
-from typing import Union, Callable, TypeAlias
-from .arg import ArgMatcher
+from typing import Union, Callable, TypeAlias, Any
+
+from .arg import ArgMatcher, Arg
 
 
 class AbstractFunctionCommandWrapper(abc.ABC):
@@ -40,12 +41,22 @@ class AbstractFunctionCommandWrapper(abc.ABC):
 
 class AbstractCommandClass(abc.ABC):
     """
-    Provides a template class for use with :func:`@CLI.command <CLI.command>`, however, classes do not need to inherit this class
-    to be an eligible command-class. They simply just need to implement the __execute__ method.
+    Provides a template class for use with :func:`@CLI.command <CLI.command>`, however, classes do not need to inherit
+    this class to be an eligible command-class. They simply just need to implement the __execute__ method.
     """
 
+    __description__ = None
+    """
+    An optional description for the command. You can change this description by modifying the value of this variable.
+    """
+
+    @staticmethod
     @abc.abstractmethod
-    def __execute__(self, *args):
+    def __execute__():
+        """
+        This method is called whenever `this` command is successfully matched. Implementations of this method can
+        choose any function signature.
+        """
         raise NotImplementedError
 
 
@@ -54,7 +65,8 @@ CommandLike: TypeAlias = Union[Callable, AbstractCommandClass]
 
 class Command:
     def __init__(self, name: str, command_like: CommandLike,
-                 /, aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = False):
+                 /, aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = False,
+                 args: list["Arg"] = None):
         self.command_like = command_like
         if isinstance(command_like, AbstractFunctionCommandWrapper):
             self.is_class = False
@@ -63,7 +75,9 @@ class Command:
             self.is_class = inspect.isclass(command_like)
             self.__wrapped_command__ = False
 
-        self.name = name
+        self.name: str = name
+        self.description: str = getattr(command_like, "__description__", None)
+        self.args = args
         self.aliases = aliases
         self._aliases = list(aliases)
         self._aliases.insert(0, self.name)
@@ -94,9 +108,9 @@ class Command:
 
         args = self._arg_matcher.match_arguments(raw_input)
         if self.is_class:
-            self.command_like.__execute__(*args)
+            return self.command_like.__execute__(*args)
         else:
-            self.command_like(*args)
+            return self.command_like(*args)
 
     def add_subcommand(self, subcommand: "Command"):
         """
@@ -113,7 +127,7 @@ class Command:
         :return:
         """
         for subcommand in self.__subcommands__:
-            if parent is str and subcommand.matches(parent):
+            if isinstance(parent, str) and subcommand.matches(parent):
                 return subcommand
             elif subcommand.command_like is parent:
                 return subcommand
@@ -188,10 +202,12 @@ class CLI:
         self._commands: set[Command] = set()
         self._command_table: dict[CommandLike, Command] = dict()
         self.console_input = console_input
+        self.result = None
 
     @complex_decorator(no_wrap=False)
     def command(self, command_like,
-                aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = True):
+                aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = True,
+                args: list["Arg"] = None):
         """
         A decorator that registers a command-like object as a command, allowing it to be executed when matched in
         an input string.
@@ -259,13 +275,15 @@ class CLI:
         :param aliases: The aliases the command can also be invoked under
         :param lowercase: If the command name should be lowercase (defaults to True)
         :param case_sensitive: If the command name is case-sensitive (defaults to True)
+        :param args: A list of :class:`Arg` to be used as an alternative to signature-based declarations
         :return: The wrapped function
         """
-        return self._register_command(command_like, None, aliases, lowercase, case_sensitive)
+        return self._register_command(command_like, None, aliases, lowercase, case_sensitive, args)
 
     @complex_decorator(no_wrap=True)
     def subcommand(self, command_like, parent: type = None,
-                   aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = True):
+                   aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = True,
+                   args: list[Arg] = None):
         """
         A decorator that registers a command-like object as a command, allowing it to be executed when matched in
         an input string.
@@ -300,11 +318,12 @@ class CLI:
         :param aliases: The aliases the command can also be invoked under.
         :param lowercase: If the command name should be lowercase (defaults to True).
         :param case_sensitive: If the command name is case-sensitive (defaults to True).
+        :param args: A list of :class:`Arg` to be used as an alternative to signature-based declarations.
         :return: The wrapped function
         """
         if parent is None:
             raise ValueError("parent cannot be None")
-        return self._register_command(command_like, parent, aliases, lowercase, case_sensitive)
+        return self._register_command(command_like, parent, aliases, lowercase, case_sensitive, args)
 
     def identity(self, func):
         """
@@ -315,27 +334,47 @@ class CLI:
         parent_class = func.__qualname__.split(".")[-2]
 
         def wrapper(*_):
-            return self._find_command(parent_class)
+            return self.find_command(parent_class)
 
         return wrapper
+
+    def find_command(self, identifier: Union[str, CommandLike]) -> Command:
+        """
+        Finds a command based on a given name or the command-like object used to register the command.
+        :param identifier: The name/alias of a command or a command-like object.
+        :return: The first matching command or `None` if no suitable command is found.
+        """
+        for command in self._commands:
+            if isinstance(identifier, str) and command.matches(identifier):
+                return command
+            elif command.command_like is identifier:
+                return command
+
+            subcommand = command.find_subcommand(identifier)
+            if subcommand:
+                return subcommand
 
     def process(self) -> str:
         """
         A function that immediately prompts for user input then processes the input,
         invoking any matching registered commands.
 
-        :return: The resulting user input
-        """
-        return self.process_input(self.console_input())
+        This function returns the input received from self.console_input(). If instead the result of the
+        matched command is desired use either :func:`process_input` or read value of `cli.result`.
 
-    def process_input(self, raw_input: str) -> str:
+        :return: The user input
+        """
+        raw_input = self.console_input()
+        self.process_input(raw_input)
+        return raw_input
+
+    def process_input(self, raw_input: str) -> Any:
         """
         A function that processes an input string, invoking any matching registered commands.
 
         :param raw_input: The string to process.
-        :return: The input string.
+        :return: The result of the first command matched
         """
-        original_input = raw_input
         space = re.search(r"\s+", raw_input)
         if not space:
             command_name = raw_input
@@ -347,9 +386,8 @@ class CLI:
         commands = list(self._commands)
         for cmd in commands:
             if cmd.matches(command_name):
-                cmd.execute(raw_input)
-
-        return original_input
+                self.result = cmd.execute(raw_input)
+                return self.result
 
     def unregister(self, command_like: CommandLike):
         """
@@ -366,27 +404,25 @@ class CLI:
             if parent:
                 parent.__subcommands__.remove(table_entry)
 
-    def _find_command(self, name) -> Command:
-        for command in self._commands:
-            if name is str and command.matches(name):
-                return command
-            elif command.command_like is name:
-                return command
-
-            subcommand = command.find_subcommand(name)
-            if subcommand:
-                return subcommand
+    def __iter__(self):
+        return self._commands.__iter__()
 
     def _register_command(self, command_like, parent: type = None,
-                          aliases: list[str] = None, lowercase: bool = False, case_sensitive: bool = True):
+                          aliases: list[str] = None, lowercase: bool = False, case_sensitive: bool = True,
+                          args: list["Arg"] = None):
+
         cmd_name: str = command_like.__name__
 
         aliases = [] if aliases is None else list(aliases)
 
-        cmd = Command(cmd_name, command_like, aliases=aliases, lowercase=lowercase, case_sensitive=case_sensitive)
+        cmd = Command(cmd_name, command_like, aliases=aliases, lowercase=lowercase,
+                      case_sensitive=case_sensitive, args=args)
+
         self._command_table[command_like] = cmd
+        command_like.__boundcommand__ = cmd
+
         if parent is not None:
-            command_parent = self._find_command(parent)
+            command_parent = self.find_command(parent)
             if command_parent:
                 command_parent.add_subcommand(cmd)
                 return command_like
