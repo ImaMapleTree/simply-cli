@@ -66,7 +66,7 @@ class SegmentString:
 
     def match(self, details: "ArgParser") -> int:
         if details.aliases:
-            aliases = list(details)
+            aliases = list(details.aliases)
         else:
             aliases = []
         aliases.append(details.name)
