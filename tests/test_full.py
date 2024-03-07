@@ -1,6 +1,6 @@
 import unittest
 
-from simplycli import CLI, Arg, ArgumentError, AbstractCommandClass
+from simplycli import CLI, Arg, ArgumentError, AbstractCommandClass, CommandSignatureError
 from simplycli.decorators import description
 
 
@@ -55,6 +55,24 @@ def create_commands(cli: CLI):
         def __execute__(message: str = Arg(0)):
             return message
 
+    @cli.command
+    def vargs(*args):
+        return "-".join(args)
+
+    @cli.command
+    def channel(id: int = Arg(0), command: str = Arg("--command"), *args):
+        return f"Channel={id}, Command={command}, Args={" ".join(args)}"
+
+def create_invalid_command_vargs(cli: CLI):
+    @cli.command
+    def invalid_command(*args, id: str):
+        raise NotImplementedError
+
+def create_invalid_command_kwargs(cli: CLI):
+    @cli.command
+    def invalid_command(**kwargs):
+        raise NotImplementedError
+
 
 class CommandTestCase(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -85,6 +103,12 @@ class CommandTestCase(unittest.TestCase):
         self.assertEqual("message", self.cli.process_input("basic2 message"))
         self.assertEqual("Returns the provided message", self.cli.find_command("basic2").description)
 
+        self.assertEqual("hello-world", self.cli.process_input("vargs hello world"))
+
+        self.assertEqual("Channel=4, Command=send, Args=Hello World", self.cli.process_input("channel 4 --command send Hello World"))
+
+        self.assertRaises(CommandSignatureError, create_invalid_command_vargs, self.cli)
+        self.assertRaises(CommandSignatureError, create_invalid_command_kwargs, self.cli)
 
 
 

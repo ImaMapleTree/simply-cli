@@ -39,7 +39,13 @@ class ArgTests(unittest.TestCase):
 
         arg = Arg("--value", default="defaulted")
 
-        self.assertEqual("default", "this should default")
+        self.assertEqual("defaulted", arg.parse("this should default", str))
+
+    def test_arg_aliases(self):
+        arg = Arg("-s", aliases=["--short"])
+
+        self.assertEqual(56, arg.parse("--short 56", int))
+        self.assertEqual(123, arg.parse("-s 123", int))
 
 
 if __name__ == '__main__':

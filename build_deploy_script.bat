@@ -1,0 +1,5 @@
+rm rf dist
+mkdir dist
+
+py -m build
+py -m twine upload --repository pypi -p pypi-AgEIcHlwaS5vcmcCJGU4MDk1OGRlLTI4MDctNGU3Zi04NDgwLTViZjVjYWIzZWZlZAACElsxLFsic2ltcGx5LWNsaSJdXQACLFsyLFsiOThlYjJiYzctYzE4Ni00ZWZkLWFkMTctYjAxM2QyODEyODc0Il1dAAAGIEJ9lX0eqqB9YoGExaZUUyUd4kpyxy8m-lWrxIEF32zW dist/*
