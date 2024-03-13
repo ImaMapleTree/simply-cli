@@ -63,6 +63,10 @@ def create_commands(cli: CLI):
     def channel(id: int = Arg(0), command: str = Arg("--command"), *args):
         return f"Channel={id}, Command={command}, Args={" ".join(args)}"
 
+    @cli.command(name="named")
+    def something():
+        return "named"
+
 def create_invalid_command_vargs(cli: CLI):
     @cli.command
     def invalid_command(*args, id: str):
@@ -109,6 +113,9 @@ class CommandTestCase(unittest.TestCase):
 
         self.assertRaises(CommandSignatureError, create_invalid_command_vargs, self.cli)
         self.assertRaises(CommandSignatureError, create_invalid_command_kwargs, self.cli)
+
+        self.assertEqual("named", self.cli.process_input("named"))
+        self.assertEqual("named", self.cli.find_command("named").name)
 
 
 

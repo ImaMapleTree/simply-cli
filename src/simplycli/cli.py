@@ -3,6 +3,7 @@ import re
 import abc
 from typing import Union, Callable, TypeAlias, Any
 
+from . import decorators
 from .arg import ArgMatcher, Arg
 
 
@@ -206,7 +207,7 @@ class CLI:
 
     @complex_decorator(no_wrap=False)
     def command(self, command_like,
-                aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = True,
+                aliases: list[str] = None, name: str = None, lowercase: bool = True, case_sensitive: bool = True,
                 args: list["Arg"] = None):
         """
         A decorator that registers a command-like object as a command, allowing it to be executed when matched in
@@ -273,16 +274,17 @@ class CLI:
 
         :param command_like: The command-like object to register
         :param aliases: The aliases the command can also be invoked under
+        :param name: The primary name of the command.
         :param lowercase: If the command name should be lowercase (defaults to True)
         :param case_sensitive: If the command name is case-sensitive (defaults to True)
         :param args: A list of :class:`Arg` to be used as an alternative to signature-based declarations
         :return: The wrapped function
         """
-        return self._register_command(command_like, None, aliases, lowercase, case_sensitive, args)
+        return self._register_command(command_like, None, aliases, name, lowercase, case_sensitive, args)
 
     @complex_decorator(no_wrap=True)
     def subcommand(self, command_like, parent: type = None,
-                   aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = True,
+                   aliases: list[str] = None, name: str = None, lowercase: bool = True, case_sensitive: bool = True,
                    args: list[Arg] = None):
         """
         A decorator that registers a command-like object as a command, allowing it to be executed when matched in
@@ -316,6 +318,7 @@ class CLI:
         :param command_like: The command-like object to register.
         :param parent: The class of the parent command.
         :param aliases: The aliases the command can also be invoked under.
+        :param name: The primary name of the command.
         :param lowercase: If the command name should be lowercase (defaults to True).
         :param case_sensitive: If the command name is case-sensitive (defaults to True).
         :param args: A list of :class:`Arg` to be used as an alternative to signature-based declarations.
@@ -323,7 +326,7 @@ class CLI:
         """
         if parent is None:
             raise ValueError("parent cannot be None")
-        return self._register_command(command_like, parent, aliases, lowercase, case_sensitive, args)
+        return self._register_command(command_like, parent, aliases, name, lowercase, case_sensitive, args)
 
     def identity(self, func):
         """
@@ -408,10 +411,10 @@ class CLI:
         return self._commands.__iter__()
 
     def _register_command(self, command_like, parent: type = None,
-                          aliases: list[str] = None, lowercase: bool = False, case_sensitive: bool = True,
+                          aliases: list[str] = None, name: str = None, lowercase: bool = False, case_sensitive: bool = True,
                           args: list["Arg"] = None):
 
-        cmd_name: str = command_like.__name__
+        cmd_name: str = name if name else command_like.__name__
 
         aliases = [] if aliases is None else list(aliases)
 

@@ -1,5 +1,3 @@
-from functools import wraps
-
 _type = type
 
 
@@ -16,11 +14,7 @@ def description(content: str):
         if getattr(command_like, "__boundcommand__", None):
             command_like.__boundcommand__.description = content
 
-        @wraps(command_like)
-        def wrapper(*args, **kwargs):
-            return command_like(*args, **kwargs)
-
-        return wrapper
+        return command_like
 
     return description_inner
 
