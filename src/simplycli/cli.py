@@ -1,9 +1,9 @@
+import abc
 import inspect
 import re
-import abc
+from collections import deque
 from typing import Union, Callable, TypeAlias, Any
 
-from . import decorators
 from .arg import ArgMatcher, Arg
 
 
@@ -200,9 +200,13 @@ def complex_decorator(**decorator_flags):
 
 class CLI:
     def __init__(self, console_input: Callable[[], str] = input):
+        """
+        :param console_input: A function which probes for user input (default: input())
+        """
         self._commands: set[Command] = set()
         self._command_table: dict[CommandLike, Command] = dict()
         self.console_input = console_input
+        self._processed = False
         self.result = None
 
     @complex_decorator(no_wrap=False)
@@ -357,6 +361,9 @@ class CLI:
             if subcommand:
                 return subcommand
 
+    def was_processed(self) -> bool:
+        return self._processed
+
     def process(self) -> str:
         """
         A function that immediately prompts for user input then processes the input,
@@ -378,6 +385,8 @@ class CLI:
         :param raw_input: The string to process.
         :return: The result of the first command matched
         """
+        self._processed = False
+
         space = re.search(r"\s+", raw_input)
         if not space:
             command_name = raw_input
@@ -390,7 +399,9 @@ class CLI:
         for cmd in commands:
             if cmd.matches(command_name):
                 self.result = cmd.execute(raw_input)
+                self._processed = True
                 return self.result
+
 
     def unregister(self, command_like: CommandLike):
         """

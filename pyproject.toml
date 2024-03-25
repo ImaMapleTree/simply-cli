@@ -1,6 +1,6 @@
 [project]
 name = "simply-cli"
-version = "0.0.8"
+version = "0.0.10"
 description = "A simple framework for building method-based reactive CLIs."
 authors = [{name="Evan Cowin"}]
 license = "MIT"
