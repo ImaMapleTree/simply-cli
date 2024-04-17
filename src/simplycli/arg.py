@@ -1,5 +1,4 @@
 import inspect
-import re
 from typing import Union, Any, Callable
 from simplycli import cli
 

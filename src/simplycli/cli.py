@@ -1,74 +1,25 @@
-import abc
 import inspect
 import re
-from collections import deque
-from typing import Union, Callable, TypeAlias, Any
-
+from typing import Union, Callable, Any
 from .arg import ArgMatcher, Arg
-
-
-class AbstractFunctionCommandWrapper(abc.ABC):
-    """
-    A niche class that must be used on function wrapper classes, or more specifically, classes that can be invoked
-    via teh __call__ method.
-    """
-
-    @abc.abstractmethod
-    def signature(self) -> Callable:
-        """
-        Returns the base callable associated with this class.
-        :return: The base callable
-        """
-        raise NotImplementedError
-
-    @abc.abstractmethod
-    def invoke(self, *args, **kwargs):
-        """
-        Invokes this wrapper with the given arguments.
-        :param args: Invocation arguments.
-        :param kwargs: Invocation keyword arguments.
-        :return: The result of the function invocation.
-        """
-        raise NotImplementedError
-
-    def __getattribute__(self, item):
-        if item == "__name__":
-            return self.signature().__name__
-        return super().__getattribute__(item)
-
-    def __call__(self, *args, **kwargs):
-        return self.invoke(*args, **kwargs)
-
-
-class AbstractCommandClass(abc.ABC):
-    """
-    Provides a template class for use with :func:`@CLI.command <CLI.command>`, however, classes do not need to inherit
-    this class to be an eligible command-class. They simply just need to implement the __execute__ method.
-    """
-
-    __description__ = None
-    """
-    An optional description for the command. You can change this description by modifying the value of this variable.
-    """
-
-    @staticmethod
-    @abc.abstractmethod
-    def __execute__():
-        """
-        This method is called whenever `this` command is successfully matched. Implementations of this method can
-        choose any function signature.
-        """
-        raise NotImplementedError
-
-
-CommandLike: TypeAlias = Union[Callable, AbstractCommandClass]
+from .bundle import BundleManager
+from .decorators import __complex_decorator__
+from .meta import CommandLike, AbstractFunctionCommandWrapper
 
 
 class Command:
+    """
+    Represents a registered command which contains various information about the command including its base function.
+    """
     def __init__(self, name: str, command_like: CommandLike,
                  /, aliases: list[str] = None, lowercase: bool = True, case_sensitive: bool = False,
                  args: list["Arg"] = None):
+
         self.command_like = command_like
+        """
+        The underlying method (or class) which serves as the target for command invocation
+        """
+
         if isinstance(command_like, AbstractFunctionCommandWrapper):
             self.is_class = False
             self.__wrapped_command__ = True
@@ -77,8 +28,18 @@ class Command:
             self.__wrapped_command__ = False
 
         self.name: str = name
+        """
+        The name of the command
+        """
         self.description: str = getattr(command_like, "__description__", None)
+        """
+        An (optional) description of the command
+        """
         self.args = args
+        """
+        A list of arguments for the command, this may be lazily-generated
+        """
+
         self.aliases = aliases
         self._aliases = list(aliases)
         self._aliases.insert(0, self.name)
@@ -167,39 +128,9 @@ class Command:
         return False
 
 
-def complex_decorator(**decorator_flags):
-    def inner(outer, *_, **__):
-        def real_decorator(cli, *args, **kwargs):
-            executed = None
-            args = list(args)
-
-            if len(args) != 0:
-                executed = args[0]
-                args = args[1:]
-
-            args.insert(0, cli)
-
-            def wrapper(f, *_, **__):
-                run_args = list(args)
-
-                run_args.insert(1, f)
-                if decorator_flags.get("no_wrap") and executed:
-                    run_args.insert(2, executed)
-
-                res = outer(*run_args, **kwargs)
-                return res
-
-            if executed and decorator_flags.get("no_wrap") is False:
-                return wrapper(executed)
-            return wrapper
-
-        return real_decorator
-
-    return inner
-
 
 class CLI:
-    def __init__(self, console_input: Callable[[], str] = input):
+    def __init__(self, console_input: Callable[[], str] = input, bundle_manager: BundleManager = None):
         """
         :param console_input: A function which probes for user input (default: input())
         """
@@ -208,8 +139,9 @@ class CLI:
         self.console_input = console_input
         self._processed = False
         self.result = None
+        self.bundles = bundle_manager if bundle_manager else BundleManager(self)
 
-    @complex_decorator(no_wrap=False)
+    @__complex_decorator__(no_wrap=False)
     def command(self, command_like,
                 aliases: list[str] = None, name: str = None, lowercase: bool = True, case_sensitive: bool = True,
                 args: list["Arg"] = None):
@@ -286,7 +218,7 @@ class CLI:
         """
         return self._register_command(command_like, None, aliases, name, lowercase, case_sensitive, args)
 
-    @complex_decorator(no_wrap=True)
+    @__complex_decorator__(no_wrap=True)
     def subcommand(self, command_like, parent: type = None,
                    aliases: list[str] = None, name: str = None, lowercase: bool = True, case_sensitive: bool = True,
                    args: list[Arg] = None):
@@ -401,7 +333,6 @@ class CLI:
                 self.result = cmd.execute(raw_input)
                 self._processed = True
                 return self.result
-
 
     def unregister(self, command_like: CommandLike):
         """

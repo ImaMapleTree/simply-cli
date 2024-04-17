@@ -1,6 +1,7 @@
 import unittest
 
-from simplycli import CLI, Arg, ArgumentError, AbstractCommandClass, CommandSignatureError
+from simplycli import CLI, Arg, AbstractCommandClass
+from simplycli.arg import ArgumentError, CommandSignatureError
 from simplycli.decorators import description
 
 
